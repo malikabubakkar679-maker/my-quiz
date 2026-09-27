@@ -1,0 +1,19 @@
+{
+  "name": "nightchat-server",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "main": "src/index.js",
+  "scripts": {
+    "start": "node src/index.js",
+    "dev": "node --watch src/index.js"
+  },
+  "engines": {
+    "node": ">=20"
+  },
+  "dependencies": {
+    "cors": "2.8.6",
+    "express": "4.22.3",
+    "socket.io": "4.8.3"
+  }
+}
