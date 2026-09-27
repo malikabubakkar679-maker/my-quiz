@@ -21,6 +21,7 @@ class AppState extends ChangeNotifier {
   List<Conversation> conversations = [];
   final Map<String, Set<String>> _typing = {};
   final Map<String, bool> _presence = {};
+  final Map<String, DateTime> _lastSeen = {};
   final _messageEvents = StreamController<Message>.broadcast();
   final _readEvents = StreamController<(String, String, DateTime)>.broadcast();
 
@@ -31,6 +32,7 @@ class AppState extends ChangeNotifier {
 
   bool isTyping(String conversationId) => _typing[conversationId]?.isNotEmpty ?? false;
   bool isOnline(AppUser user) => _presence[user.id] ?? user.online;
+  DateTime? lastSeen(AppUser user) => _lastSeen[user.id] ?? user.lastSeen;
 
   Future<void> init() async {
     _prefs = await SharedPreferences.getInstance();
@@ -92,13 +94,17 @@ class AppState extends ChangeNotifier {
     notifyListeners();
   }
 
-  void markConversationRead(String conversationId) {
+  Future<void> markConversationRead(String conversationId) async {
+    try {
+      await api.markRead(conversationId);
+    } catch (_) {
+      return;
+    }
     final conv = conversations.where((c) => c.id == conversationId).firstOrNull;
     if (conv != null && conv.unread > 0) {
       conv.unread = 0;
       notifyListeners();
     }
-    api.markRead(conversationId).catchError((_) {});
   }
 
   void sendTyping(String conversationId, bool typing) {
@@ -121,6 +127,7 @@ class AppState extends ChangeNotifier {
     conversations = [];
     _typing.clear();
     _presence.clear();
+    _lastSeen.clear();
     await _prefs.remove(_tokenKey);
   }
 
@@ -181,7 +188,18 @@ class AppState extends ChangeNotifier {
 
     socket.on('presence', (data) {
       final map = Map<String, dynamic>.from(data as Map);
-      _presence[map['userId'] as String] = map['online'] == true;
+      final userId = map['userId'] as String;
+      final isOnline = map['online'] == true;
+      _presence[userId] = isOnline;
+      final lastSeen = map['lastSeen'];
+      if (lastSeen is num) {
+        _lastSeen[userId] = DateTime.fromMillisecondsSinceEpoch(lastSeen.toInt());
+      }
+      if (!isOnline) {
+        for (final set in _typing.values) {
+          set.remove(userId);
+        }
+      }
       notifyListeners();
     });
 

@@ -209,6 +209,7 @@ class _PeopleTabState extends State<_PeopleTab> {
   List<AppUser> _users = [];
   bool _loading = true;
   Timer? _debounce;
+  int _request = 0;
 
   @override
   void initState() {
@@ -223,12 +224,13 @@ class _PeopleTabState extends State<_PeopleTab> {
   }
 
   Future<void> _load() async {
+    final request = ++_request;
     try {
       final users = await context.read<AppState>().api.users(_search.text.trim());
-      if (mounted) setState(() => _users = users);
+      if (mounted && request == _request) setState(() => _users = users);
     } catch (_) {
     } finally {
-      if (mounted) setState(() => _loading = false);
+      if (mounted && request == _request) setState(() => _loading = false);
     }
   }
 
@@ -349,7 +351,7 @@ class _ProfileTab extends StatelessWidget {
       body: ListView(
         padding: const EdgeInsets.all(20),
         children: [
-          ProfileHeader(user: me, online: true),
+          ProfileHeader(user: me, online: true, lastSeen: me.lastSeen),
           const SizedBox(height: 28),
           _SettingsTile(
             icon: Icons.edit_rounded,
@@ -370,9 +372,10 @@ class _ProfileTab extends StatelessWidget {
 }
 
 class ProfileHeader extends StatelessWidget {
-  const ProfileHeader({super.key, required this.user, required this.online});
+  const ProfileHeader({super.key, required this.user, required this.online, required this.lastSeen});
   final AppUser user;
   final bool online;
+  final DateTime? lastSeen;
 
   @override
   Widget build(BuildContext context) {
@@ -400,7 +403,7 @@ class ProfileHeader extends StatelessWidget {
           Text('@${user.username}', style: const TextStyle(color: AppColors.primary, fontSize: 15)),
           const SizedBox(height: 8),
           Text(
-            lastSeenLabel(online, user.lastSeen),
+            lastSeenLabel(online, lastSeen),
             style: TextStyle(color: online ? AppColors.online : AppColors.textMuted, fontSize: 13),
           ),
           const SizedBox(height: 16),

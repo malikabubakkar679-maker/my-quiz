@@ -7,10 +7,17 @@ const DB_FILE = path.join(DATA_DIR, "db.json");
 const empty = () => ({ users: [], sessions: [], conversations: [], messages: [] });
 
 function load() {
+  let raw;
   try {
-    return { ...empty(), ...JSON.parse(fs.readFileSync(DB_FILE, "utf8")) };
-  } catch {
-    return empty();
+    raw = fs.readFileSync(DB_FILE, "utf8");
+  } catch (err) {
+    if (err.code === "ENOENT") return empty();
+    throw err;
+  }
+  try {
+    return { ...empty(), ...JSON.parse(raw) };
+  } catch (err) {
+    throw new Error(`Refusing to start: ${DB_FILE} is not valid JSON (${err.message}). Fix or move the file.`);
   }
 }
 

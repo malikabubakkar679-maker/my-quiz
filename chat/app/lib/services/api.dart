@@ -19,6 +19,13 @@ class AuthResult {
   final AppUser user;
 }
 
+class MessagePage {
+  MessagePage(this.messages, this.hasMore, this.conversation);
+  final List<Message> messages;
+  final bool hasMore;
+  final Conversation conversation;
+}
+
 class ApiClient {
   ApiClient({this.token});
 
@@ -114,12 +121,20 @@ class ApiClient {
       (await _send('POST', '/conversations', body: {'userId': userId}))['conversation']
           as Map<String, dynamic>);
 
-  Future<(List<Message>, Conversation)> messages(String conversationId) async {
-    final data = await _send('GET', '/conversations/$conversationId/messages');
+  Future<MessagePage> messages(String conversationId, {DateTime? before}) async {
+    final data = await _send(
+      'GET',
+      '/conversations/$conversationId/messages',
+      query: before == null ? null : {'before': '${before.millisecondsSinceEpoch}'},
+    );
     final messages = (data['messages'] as List)
         .map((m) => Message.fromJson(m as Map<String, dynamic>))
         .toList();
-    return (messages, Conversation.fromJson(data['conversation'] as Map<String, dynamic>));
+    return MessagePage(
+      messages,
+      (data['hasMore'] as bool?) ?? false,
+      Conversation.fromJson(data['conversation'] as Map<String, dynamic>),
+    );
   }
 
   Future<Message> sendMessage(String conversationId, String text) async => Message.fromJson(

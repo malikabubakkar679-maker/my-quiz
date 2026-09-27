@@ -31,6 +31,8 @@ class _ChatScreenState extends State<ChatScreen> {
   bool _typing = false;
   bool _loading = true;
   bool _sending = false;
+  bool _hasMore = false;
+  bool _loadingMore = false;
   late final AppState _state = context.read<AppState>();
 
   String get _id => widget.conversation.id;
@@ -48,17 +50,46 @@ class _ChatScreenState extends State<ChatScreen> {
       setState(() => _otherReadAt = e.$3);
     });
     _input.addListener(_onInput);
+    _scroll.addListener(_onScroll);
+  }
+
+  void _mergeMessages(Iterable<Message> incoming) {
+    final known = {for (final m in _messages) m.id};
+    _messages
+      ..addAll(incoming.where((m) => !known.contains(m.id)))
+      ..sort((a, b) => a.createdAt.compareTo(b.createdAt));
+  }
+
+  void _onScroll() {
+    if (!_scroll.hasClients || !_hasMore || _loadingMore || _messages.isEmpty) return;
+    if (_scroll.position.pixels >= _scroll.position.maxScrollExtent - 200) _loadOlder();
+  }
+
+  Future<void> _loadOlder() async {
+    setState(() => _loadingMore = true);
+    try {
+      final page = await _state.api.messages(_id, before: _messages.first.createdAt);
+      if (!mounted) return;
+      setState(() {
+        _mergeMessages(page.messages);
+        _hasMore = page.hasMore;
+      });
+    } catch (_) {
+    } finally {
+      if (mounted) setState(() => _loadingMore = false);
+    }
   }
 
   Future<void> _load() async {
     try {
-      final (messages, conv) = await _state.api.messages(_id);
+      final page = await _state.api.messages(_id);
       if (!mounted) return;
       setState(() {
-        _messages
-          ..clear()
-          ..addAll(messages);
-        _otherReadAt = conv.otherReadAt;
+        _mergeMessages(page.messages);
+        _hasMore = page.hasMore;
+        if (page.conversation.otherReadAt.isAfter(_otherReadAt)) {
+          _otherReadAt = page.conversation.otherReadAt;
+        }
       });
       _state.markConversationRead(_id);
     } catch (_) {
@@ -106,14 +137,14 @@ class _ChatScreenState extends State<ChatScreen> {
     }
   }
 
-  void _showProfile(AppUser user, bool online) {
+  void _showProfile(AppUser user, bool online, DateTime? lastSeen) {
     showModalBottomSheet<void>(
       context: context,
       backgroundColor: AppColors.background,
       showDragHandle: true,
       builder: (_) => Padding(
         padding: const EdgeInsets.fromLTRB(20, 0, 20, 32),
-        child: ProfileHeader(user: user, online: online),
+        child: ProfileHeader(user: user, online: online, lastSeen: lastSeen),
       ),
     );
   }
@@ -122,6 +153,7 @@ class _ChatScreenState extends State<ChatScreen> {
   void dispose() {
     _stopTyping();
     _typingTimer?.cancel();
+    _scroll.removeListener(_onScroll);
     _messageSub?.cancel();
     _readSub?.cancel();
     _input.dispose();
@@ -134,6 +166,7 @@ class _ChatScreenState extends State<ChatScreen> {
     final state = context.watch<AppState>();
     final user = state.conversations.where((c) => c.id == _id).firstOrNull?.user ?? widget.conversation.user;
     final online = state.isOnline(user);
+    final lastSeen = state.lastSeen(user);
     final typing = state.isTyping(_id);
     final meId = state.me?.id;
     final reversed = _messages.reversed.toList();
@@ -142,7 +175,7 @@ class _ChatScreenState extends State<ChatScreen> {
       appBar: AppBar(
         titleSpacing: 0,
         title: InkWell(
-          onTap: () => _showProfile(user, online),
+          onTap: () => _showProfile(user, online, lastSeen),
           child: Row(
             children: [
               UserAvatar(
@@ -163,7 +196,7 @@ class _ChatScreenState extends State<ChatScreen> {
                       style: const TextStyle(fontSize: 17, fontWeight: FontWeight.w700),
                     ),
                     Text(
-                      typing ? 'typing…' : lastSeenLabel(online, user.lastSeen),
+                      typing ? 'typing…' : lastSeenLabel(online, lastSeen),
                       style: TextStyle(
                         fontSize: 12,
                         fontWeight: FontWeight.w400,
@@ -179,7 +212,7 @@ class _ChatScreenState extends State<ChatScreen> {
         actions: [
           IconButton(
             icon: const Icon(Icons.info_outline_rounded),
-            onPressed: () => _showProfile(user, online),
+            onPressed: () => _showProfile(user, online, lastSeen),
           ),
         ],
       ),
@@ -194,8 +227,20 @@ class _ChatScreenState extends State<ChatScreen> {
                         controller: _scroll,
                         reverse: true,
                         padding: const EdgeInsets.fromLTRB(12, 12, 12, 8),
-                        itemCount: reversed.length,
+                        itemCount: reversed.length + (_hasMore ? 1 : 0),
                         itemBuilder: (context, i) {
+                          if (i == reversed.length) {
+                            return const Padding(
+                              padding: EdgeInsets.all(16),
+                              child: Center(
+                                child: SizedBox(
+                                  width: 22,
+                                  height: 22,
+                                  child: CircularProgressIndicator(strokeWidth: 2, color: AppColors.primary),
+                                ),
+                              ),
+                            );
+                          }
                           final m = reversed[i];
                           final older = i + 1 < reversed.length ? reversed[i + 1] : null;
                           final newer = i > 0 ? reversed[i - 1] : null;

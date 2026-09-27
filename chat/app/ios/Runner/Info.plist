@@ -6,7 +6,7 @@
 	<string>NightChat needs access to your photos to set your profile picture.</string>
 	<key>NSAppTransportSecurity</key>
 	<dict>
-		<key>NSAllowsArbitraryLoads</key>
+		<key>NSAllowsLocalNetworking</key>
 		<true/>
 	</dict>
 	<key>CADisableMinimumFrameDurationOnPhone</key>

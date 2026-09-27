@@ -23,7 +23,23 @@ npm install
 npm start          # http://localhost:4000
 ```
 
-Environment variables (all optional): `PORT` (default `4000`), `DATA_DIR` (JSON database, default `./data`), `UPLOAD_DIR` (profile images, default `./uploads`), `WEB_DIR` (Flutter web build served at `/`, default `../app/build/web`).
+Environment variables (all optional):
+
+- `PORT` (default `4000`)
+- `DATA_DIR`: JSON database location (default `./data`)
+- `UPLOAD_DIR`: profile images (default `./uploads`)
+- `WEB_DIR`: Flutter web build served at `/` (default `../app/build/web`)
+- `CORS_ORIGINS`: comma-separated extra browser origins allowed to call the API (same-origin and `localhost` are always allowed)
+- `SESSION_TTL_DAYS`: session lifetime (default `30`)
+- `TRUST_PROXY=1`: trust `X-Forwarded-For` when running behind a reverse proxy, so login rate limiting sees real client IPs
+
+## Security notes
+
+- Passwords are hashed with scrypt. Session tokens are stored as SHA-256 hashes and expire, and logging out disconnects that session's sockets.
+- Failed logins are rate limited per IP and per username (10 attempts per 15 minutes).
+- Uploaded avatars are checked for real PNG/JPEG/GIF/WEBP magic bytes and served with `nosniff`.
+- In production, run the server behind HTTPS and build the app with `--dart-define=API_URL=https://...`. Release Android builds block cleartext HTTP, and iOS only allows plain HTTP to local-network hosts.
+- On web, the session token is kept in browser local storage, so deploy the web build without third-party scripts.
 
 ## Running the Flutter app
 
